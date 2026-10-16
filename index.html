@@ -3317,7 +3317,21 @@ aniHistoryReady=true;
 // A direct shared URL is decoded asynchronously; showShared() will update the state.
 try{history.replaceState(aniHistorySnapshot(),'',location.href)}catch{}
 
+async function restoreFromHash(){
+ const raw=location.hash.slice('#restore='.length);
+ history.replaceState(history.state,'',location.href.split('#')[0]);
+ try{
+  if(!/^[A-Za-z0-9_-]+$/.test(raw)||raw.length>200000)throw Error('invalid');
+  const bin=atob(raw.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-raw.length%4)%4));
+  const candidate=cleanImport(JSON.parse(await unpackShare('g',Uint8Array.from(bin,c=>c.charCodeAt(0)))));
+  importCandidate=candidate;
+  $('#importPreview').textContent=`復元リンク：${Object.keys(candidate).length}作品 ／ 現在の記録：${Object.keys(saved).length}作品。`;
+  $('#importDetails').textContent=mergePreview(candidate);$('#importTiePreference').value='current';
+  $('#importModeDialog').showModal();
+ }catch{toast('復元リンクを読み込めませんでした。リンクが途中で切れていないか確認してください。','error')}
+}
 updateCounts();if(location.hash.startsWith(SHARE_PREFIX)){readShareFromHash()}else{render();fetchPage(true)}
+if(location.hash.startsWith('#restore='))restoreFromHash();
 initAutoBackup();
 setTimeout(remindBackup,2200);
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
