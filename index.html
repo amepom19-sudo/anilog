@@ -726,6 +726,38 @@ dialog menu button,.review-dialog-actions button{border-radius:var(--radius-sm);
 .back-to-top:hover{background:var(--surface-hover);border-color:var(--accent);color:var(--accent)}
 .back-to-top .ui-icon{width:20px;height:20px;vertical-align:0}
 @media(max-width:740px){.back-to-top{right:16px;bottom:calc(env(safe-area-inset-bottom) + 76px);width:40px;height:40px}}
+
+/* Dense my-list layout on desktop: compact cards in a multi-column grid */
+@media(min-width:741px){
+  .main{max-width:1800px;padding-top:28px}
+  .section-header{margin-bottom:18px}
+  .annual-entry{display:none!important}
+  .airing-today{padding:12px 14px;margin-bottom:16px}
+  .airing-today-head{margin-bottom:8px}
+  .airing-list{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .airing-list button{padding:8px 10px}
+  .airing-week[open]{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));column-gap:16px}
+  .airing-week[open]>summary{grid-column:1/-1}
+  .airing-week .airing-list{grid-template-columns:minmax(0,1fr)}
+  .stats{margin-bottom:14px}
+  .pattern-a-list{grid-template-columns:repeat(auto-fill,minmax(540px,1fr));gap:12px}
+  .pattern-a-card{grid-template-columns:76px minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:14px;row-gap:10px;align-items:start;min-height:0;padding:12px}
+  .pattern-a-card .record-poster{grid-column:1;grid-row:1/3;width:76px;height:108px}
+  .pattern-a-card .record-main{grid-column:2/4;grid-row:1}
+  .pattern-a-card .card-title{font-size:var(--fs-lg);line-height:1.4;margin:0 0 4px}
+  .pattern-a-card .title-button{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .pattern-a-meta{font-size:var(--fs-xs);gap:6px}
+  .pattern-a-tags{margin-top:6px}
+  .next-watch-toggle{margin-top:6px;min-height:28px;padding:4px 8px}
+  .pattern-a-watch-column,.pattern-a-personal-column{grid-row:2;align-self:stretch;justify-content:flex-start;gap:8px;padding:10px 0 0;border-left:0;border-top:1px solid var(--border)}
+  .pattern-a-watch-column{grid-column:2}
+  .pattern-a-personal-column{grid-column:3}
+  .pattern-a-status-menu,.pattern-a-card .record-primary,.note-preview:not(.has-note){width:100%;max-width:200px}
+  .pattern-a-status-summary,.note-preview:not(.has-note),.pattern-a-card .record-primary{height:34px;min-height:34px}
+  .note-preview.has-note{height:34px}
+  .quick-star .ui-icon{width:20px;height:20px}
+  .pattern-a-update{display:none}
+}
 </style>
 </head>
 <body>
