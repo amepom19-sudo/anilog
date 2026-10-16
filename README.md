@@ -3,6 +3,8 @@
 観たアニメ・観ているアニメ・気になるアニメを記録する、ブラウザだけで動くアニメ視聴管理アプリです（単一HTMLのSPA）。
 視聴記録はブラウザの localStorage にだけ保存され、サーバーには送信されません。
 
+**Webで使う：** https://amepom19-sudo.github.io/anilog/
+
 ## 使い方（Windows）
 
 | ファイル | 役割 |
