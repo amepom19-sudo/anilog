@@ -445,6 +445,14 @@ body.saved-mode:not(.view-detail):not(.view-ranking):not(.view-annual) .annual-e
 .airing-week-day h4{margin:0 0 6px;font-size:var(--fs-sm);color:var(--muted)}
 .airing-week-day.is-today h4{color:var(--accent)}
 .sidebar-bottom .auto-backup-btn{width:100%;margin-top:10px}
+.card-quick{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.card-quick:empty{display:none}
+.card-quick .next-watch-toggle{margin-top:0}
+.card-watch-btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:99px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-size:var(--fs-xs);font-weight:var(--fw-bold);text-decoration:none;white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
+.card-watch-btn:hover{background:#d2f0aa;border-color:#d2f0aa}
+.card-watch-btn .ui-icon{width:13px;height:13px;vertical-align:0}
+.card-watch-btn.is-empty{background:transparent;border-color:var(--accent-border);color:var(--accent)}
+.card-watch-btn.is-empty:hover{background:var(--accent-soft);border-color:var(--accent)}
 .quick-rating{display:grid;gap:6px}
 .quick-rating-label{color:var(--muted);font-size:var(--fs-xs);font-weight:var(--fw-semi)}
 .quick-rating-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
@@ -1783,12 +1791,27 @@ function quickRate(id,n){return queueRecordWrite(async()=>{
  render();if(detailActiveItem?.id===id)renderDetailParts(detailNonce);toast(`「${item.title}」を★${n}で評価しました`);return true;
 })}
 function patternARecordMeta(a){const pieces=[Number.isInteger(a.year)?`${a.year}年`:'放送年未登録',a.type?typeJa(a.type):'',Number.isInteger(a.episodes)&&a.episodes>0?`全${a.episodes}話`:''].filter(Boolean);
- const tags=cleanAnalysisMeta(a.analysisMeta)?.genres?.slice(0,3)||[];
- return `<div class="pattern-a-meta">${pieces.map(x=>`<span>${safeText(x)}</span>`).join('<span class="pattern-a-separator" aria-hidden="true">·</span>')}</div>${tags.length?`<div class="pattern-a-tags">${tags.map(t=>`<span>${safeText(genreJa(t.name))}</span>`).join('')}</div>`:''}`;
+ return `<div class="pattern-a-meta">${pieces.map(x=>`<span>${safeText(x)}</span>`).join('<span class="pattern-a-separator" aria-hidden="true">·</span>')}</div>`;
 }
+function readWatchUrl(u){try{const x=new URL(u);return x.protocol==='https:'?x.href:''}catch{return ''}}
+function watchButtonMarkup(a){
+ const r=saved[a.id];if(!r||mode==='share')return '';
+ const pref=WATCH_SERVICES.find(s=>s.key===r.watchService),last=readWatchUrl(r.watchUrl);
+ const url=last||(pref?serviceSearchUrl(pref.domain,a.title):'');
+ const label=last&&r.watchLabel?r.watchLabel:pref?.name||'';
+ if(url&&label)return `<a class="card-watch-btn" href="${safeText(url)}" target="_blank" rel="noopener noreferrer" data-card-watch="${safeText(a.id)}">${uiIcon('play')} ${safeText(label)}で見る</a>`;
+ return `<button type="button" class="card-watch-btn is-empty" data-detail-id="${safeText(a.id)}" data-open-watch="1">${uiIcon('play')} 視聴先を選ぶ</button>`;
+}
+function rememberWatchLink(id,url,name){return queueRecordWrite(async()=>{
+ const e=saved[id],u=readWatchUrl(url),label=String(name||'').trim().slice(0,40);
+ if(!e||!u||!label)return false;if(e.watchUrl===u&&e.watchLabel===label)return true;
+ const oldU=e.watchUrl,oldL=e.watchLabel;e.watchUrl=u;e.watchLabel=label;
+ if(!await persist()){if(oldU)e.watchUrl=oldU;else delete e.watchUrl;if(oldL)e.watchLabel=oldL;else delete e.watchLabel;return false}
+ render();return true;
+})}
 function recordCard(a){const status=a.status,id=safeText(a.id),watch=['watching','paused'].includes(status),completed=status==='watched';
  const date=completed?`<button class="record-date pattern-a-date" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:'';
- return `<article class="anime-card record-card record-row pattern-a-card pattern-a-${safeText(status)}"><button class="record-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="record-main">${recordTitle(a)}${patternARecordMeta(a)}${date}${status==='planned'?nextWatchToggleMarkup(a):''}</div><div class="pattern-a-watch-column">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','視聴を再開'):''}${completed?`<button type="button" class="pattern-a-date-watch" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:''}</div><div class="pattern-a-personal-column">${patternAReview(a)}${noteMarkup(a)}${a.updatedAt&&Number.isFinite(Date.parse(a.updatedAt))?`<span class="pattern-a-update">更新日：${safeText(new Date(a.updatedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}))}</span>`:''}</div></article>`;
+ return `<article class="anime-card record-card record-row pattern-a-card pattern-a-${safeText(status)}"><button class="record-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="record-main">${recordTitle(a)}${patternARecordMeta(a)}${date}<div class="card-quick">${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div></div><div class="pattern-a-watch-column">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','視聴を再開'):''}${completed?`<button type="button" class="pattern-a-date-watch" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:''}</div><div class="pattern-a-personal-column">${patternAReview(a)}${noteMarkup(a)}${a.updatedAt&&Number.isFinite(Date.parse(a.updatedAt))?`<span class="pattern-a-update">更新日：${safeText(new Date(a.updatedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}))}</span>`:''}</div></article>`;
 }
 document.addEventListener('click',e=>{const panel=$('#filterDisclosure');if(panel.open&&!panel.contains(e.target))panel.open=false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#filterDisclosure').open){$('#filterDisclosure').open=false;$('#filterDisclosure summary').focus()}});
@@ -2671,6 +2694,11 @@ $('#homeBrand').addEventListener('click',goHome);
 $$('[data-view]').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='saved'?showSaved():showSeason()));
 $$('[data-status-filter]').forEach(b=>b.addEventListener('click',()=>showSaved(b.dataset.statusFilter)));
 $$('[data-stat-filter]').forEach(b=>b.addEventListener('click',()=>showSaved(b.dataset.statFilter)));
+$('#cards').addEventListener('click',e=>{
+ const w=e.target.closest('[data-card-watch]');
+ if(w){const id=w.dataset.cardWatch;if(saved[id]?.status!=='watching')setStatus(id,'watching');pendingWatch={id,at:Date.now()};return}
+ if(e.target.closest('[data-open-watch]'))setTimeout(()=>$('#detailContent .watch-card')?.scrollIntoView({behavior:'smooth',block:'center'}),500);
+});
 $('#cards').addEventListener('click',e=>{const q=e.target.closest('[data-quick-rate]');if(q){quickRate(q.dataset.quickRate,Number(q.dataset.star));return}const b=e.target.closest('[data-rate-id]');if(b)openRating(b.dataset.rateId)});
 $('#savedOrder').addEventListener('change',()=>{if(mode==='saved')render()});
 $('#libraryView').addEventListener('click',e=>{const b=e.target.closest('#unratedToggle');if(b){unratedOnly=!unratedOnly;render()}});
@@ -2787,6 +2815,7 @@ function cleanImport(data){if(data?.app!=='ANI:LOG'||!Array.isArray(data.items))
   ...(a.status==='planned'&&typeof a.nextWatchPinnedAt==='string'&&Number.isFinite(Date.parse(a.nextWatchPinnedAt))?{nextWatchPinnedAt:a.nextWatchPinnedAt}:{}),
   ...(typeof a.nextWatchUpdatedAt==='string'&&Number.isFinite(Date.parse(a.nextWatchUpdatedAt))?{nextWatchUpdatedAt:a.nextWatchUpdatedAt}:{}),
   ...(WATCH_SERVICE_KEYS.has(a.watchService)?{watchService:a.watchService}:{}),
+  ...(readWatchUrl(a.watchUrl)&&typeof a.watchLabel==='string'&&a.watchLabel.trim()?{watchUrl:readWatchUrl(a.watchUrl),watchLabel:a.watchLabel.trim().slice(0,40)}:{}),
   ...(readBroadcast(a.broadcast)?{broadcast:readBroadcast(a.broadcast)}:{})};
  }
  if(!Object.keys(result).length)throw Error('有効な作品がありません');return result;
@@ -3040,7 +3069,7 @@ function detailEpisodes(data){const list=data?.data||[];if(!Array.isArray(list)|
 function detailRelations(full){const relations=Array.isArray(full.relations)?full.relations:[];const entries=[];for(const group of relations){for(const e of group.entry||[]){if(String(e.type).toLowerCase()!=='anime'||!Number.isInteger(e.mal_id))continue;const im=safeImage(e.images?.jpg?.image_url||e.images?.jpg?.large_image_url||'');entries.push({...e,relationship:group.relation,image:im})}}return entries.length?detailHeading('関連作品',`<div class="detail-related-grid">${entries.slice(0,24).map(e=>`<button type="button" class="detail-related-item" data-related-id="jikan:${e.mal_id}" data-related-title="${safeText(e.name)}">${e.image?`<img loading="lazy" src="${safeText(e.image)}" alt="" referrerpolicy="no-referrer">`:''}<span class="detail-related-label">${safeText(e.relationship||'関連作品')}</span><span class="detail-related-name">${safeText(e.name)}</span></button>`).join('')}</div>`):''}
 function detailLinks(full){const result=[];for(const p of full.external||[])result.push({...p,category:'公式・外部リンク'});const seen=new Set();const links=result.filter(p=>{const u=safeLink(p.url);if(!u||seen.has(u))return false;seen.add(u);return true});if(!links.length)return '';return detailHeading('公式・外部リンク',`<div class="detail-links">${links.slice(0,25).map(x=>`<a href="${safeText(safeLink(x.url))}" target="_blank" rel="noopener noreferrer">${safeText(x.name||'サイトを開く')} ${uiIcon('external')}</a>`).join('')}</div>`)}
 function serviceSearchUrl(domain,title){return `https://www.google.com/search?q=${encodeURIComponent('site:'+domain+' '+title)}`}
-function streamAnchor(url,label,cls='watch-chip'){return `<a class="${cls}" href="${safeText(url)}" target="_blank" rel="noopener noreferrer" data-stream-link="true">${label}</a>`}
+function streamAnchor(url,label,cls='watch-chip',name=''){return `<a class="${cls}" href="${safeText(url)}" target="_blank" rel="noopener noreferrer" data-stream-link="true" data-stream-name="${safeText(name)}">${label}</a>`}
 function detailStreamingLinks(full,title,record){
  const seen=new Set();
  let official=(full?.streaming||[]).filter(p=>{const u=safeLink(p.url);if(!u||seen.has(u))return false;seen.add(u);return true});
@@ -3051,13 +3080,13 @@ function detailStreamingLinks(full,title,record){
   const match=pref.match?official.find(p=>pref.match.test(p.name||'')):null;
   if(match)official=official.filter(p=>p!==match);
   const url=match?safeLink(match.url):title?serviceSearchUrl(pref.domain,title):'';
-  if(url)primary=streamAnchor(url,`${uiIcon('play')} ${safeText(pref.name)}で見る${match?'':'<small>検索</small>'}`,'watch-primary');
+  if(url)primary=streamAnchor(url,`${uiIcon('play')} ${safeText(pref.name)}で見る${match?'':'<small>検索</small>'}`,'watch-primary',pref.name);
  }
  const searchList=title?WATCH_SERVICES.filter(s=>searchServices.includes(s.key)&&s!==pref):[];
  const prefs=`<details class="watch-prefs" id="searchPrefs"${searchPrefsOpen?' open':''}><summary>表示を変更</summary><div class="watch-prefs-list">${WATCH_SERVICES.map(s=>`<label><input type="checkbox" data-search-pref="${s.key}"${searchServices.includes(s.key)?' checked':''}> ${safeText(s.name)}</label>`).join('')}</div></details>`;
  const rows=[
-  official.length?`<div class="watch-row"><span class="watch-row-label">公式</span><div class="watch-chips">${official.slice(0,25).map(x=>streamAnchor(safeLink(x.url),`${safeText(x.name||'サイトを開く')} ${uiIcon('external')}`)).join('')}</div></div>`:'',
-  title?`<div class="watch-row"><span class="watch-row-label">検索</span><div class="watch-chips">${searchList.map(s=>streamAnchor(serviceSearchUrl(s.domain,title),`${uiIcon('search')} ${safeText(s.name)}`)).join('')}${prefs}</div></div>`:''
+  official.length?`<div class="watch-row"><span class="watch-row-label">公式</span><div class="watch-chips">${official.slice(0,25).map(x=>streamAnchor(safeLink(x.url),`${safeText(x.name||'サイトを開く')} ${uiIcon('external')}`,'watch-chip',x.name||'')).join('')}</div></div>`:'',
+  title?`<div class="watch-row"><span class="watch-row-label">検索</span><div class="watch-chips">${searchList.map(s=>streamAnchor(serviceSearchUrl(s.domain,title),`${uiIcon('search')} ${safeText(s.name)}`,'watch-chip',s.name)).join('')}${prefs}</div></div>`:''
  ].join('');
  return `<section class="watch-card" aria-label="配信で見る"><div class="watch-card-title">配信で見る</div>${primary}<div class="watch-rows">${rows}</div><p class="watch-note">公式リンクの登録状況・検索結果は、日本国内での配信可否を保証しません。</p></section>`;
 }
@@ -3247,7 +3276,7 @@ $('#detailContent').addEventListener('keydown',e=>{
 $('#detailContent').addEventListener('click',e=>{
  const add=e.target.closest('[data-detail-add]');if(add&&detailActiveItem){setStatus(detailActiveItem.id,add.dataset.detailAdd);return}
  if(e.target.closest('[data-detail-jump]')){$('#detailContent .detail-journal')?.scrollIntoView({behavior:'smooth',block:'start'});return}
- const streamLink=e.target.closest('[data-stream-link]');if(streamLink&&detailActiveItem&&mode!=='share'){if(saved[detailActiveItem.id]?.status!=='watching')setStatus(detailActiveItem.id,'watching');pendingWatch={id:detailActiveItem.id,at:Date.now()}}
+ const streamLink=e.target.closest('[data-stream-link]');if(streamLink&&detailActiveItem&&mode!=='share'){if(saved[detailActiveItem.id]?.status!=='watching')setStatus(detailActiveItem.id,'watching');rememberWatchLink(detailActiveItem.id,streamLink.href,streamLink.dataset.streamName);pendingWatch={id:detailActiveItem.id,at:Date.now()}}
  const rate=e.target.closest('[data-rate-id]');if(rate){openRating(rate.dataset.rateId);return}
  const tab=e.target.closest('[data-detail-tab]');if(tab){selectDetailTab(tab.dataset.detailTab);return}
  const retryField=e.target.closest('[data-detail-field-retry]');if(retryField&&detailActiveItem){ensureDetailField(detailActiveItem.id,retryField.dataset.detailFieldRetry,true);return}
