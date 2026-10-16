@@ -835,7 +835,7 @@ dialog menu button,.review-dialog-actions button{border-radius:var(--radius-sm);
         <div class="filter-tabs" id="filters"><button class="active" data-type="all">すべて</button><button data-type="TV">TV</button><button data-type="Movie">映画</button><button data-type="OVA">OVA</button><button data-type="ONA">Web配信</button><label class="search-sort hidden" id="searchSortWrap" for="searchSort"><span>並び替え</span><select id="searchSort" aria-label="検索結果の並び替え"><option value="new">新しい順</option><option value="relevance">関連度順</option><option value="old">古い順</option></select></label></div>
       </div>
 </div></details></div><div class="list-caption"><span class="result-info" id="resultInfo"></span><span id="listOrderHint">放送時期の新しい順</span><select id="savedOrder" class="saved-order-select hidden" aria-label="マイリストの年内の並び順"><option value="broadcast">放送時期が新しい順</option><option value="updated">更新が新しい順</option><option value="title">作品名順</option><option value="rating">評価が高い順</option></select></div>      <div id="offlineNotice" class="offline-note hidden" role="status"></div><div class="cards" id="cards" aria-live="polite"></div><div class="load-wrap"><button class="loadmore hidden" id="loadMore">もっと見る <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" focusable="false"><use href="#ui-down"/></svg></button></div>
-      <p class="disclaimer">作品情報提供：<a href="https://api.tenrai.org/documentation" target="_blank" rel="noopener noreferrer">Tenrai API</a>（非公式MyAnimeListデータ）。情報には欠落・誤表記が含まれる場合があります。作品検索で結果が少ない場合は、検索語を日本語Wikipediaへ送って別名を調べることがあります（視聴履歴は送信しません）。視聴履歴はこのブラウザに保存され、別端末には自動同期されません。<a href="https://tenrai.org/terms" target="_blank" rel="noopener noreferrer">データ提供元について</a></p>
+      <p class="disclaimer">作品情報提供：<a href="https://api.tenrai.org/documentation" target="_blank" rel="noopener noreferrer">Tenrai API</a>（非公式MyAnimeListデータ）。情報には欠落・誤表記が含まれる場合があります。作品検索で結果が少ない場合は、検索語を日本語Wikipediaへ送って別名を調べることがあります。英語のあらすじは、日本語にするため翻訳サービス（MyMemory）へ送ることがあります（どちらも視聴履歴は送信しません）。視聴履歴はこのブラウザに保存され、別端末には自動同期されません。<a href="https://tenrai.org/terms" target="_blank" rel="noopener noreferrer">データ提供元について</a></p>
     </section>
     <section id="annualView" class="hidden" aria-label="年間アニメまとめ">
       <div class="annual-back-row"><button type="button" id="annualBack" class="detail-back"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><use href="#ui-back"/></svg> マイリストに戻る</button><span>YOUR ANIME YEAR</span></div>
@@ -2999,30 +2999,68 @@ let onDeviceTranslator=null, onDeviceTranslatorPending=null;
 async function getOnDeviceTranslator(){
  if(onDeviceTranslator)return onDeviceTranslator;
  if(!('Translator' in self))throw Error('このブラウザは端末内翻訳に対応していません');
-
  if(!onDeviceTranslatorPending)onDeviceTranslatorPending=self.Translator.create({sourceLanguage:'en',targetLanguage:'ja'}).then(t=>onDeviceTranslator=t).finally(()=>onDeviceTranslatorPending=null);
- return onDeviceTranslatorPending;
+ await onDeviceTranslatorPending;
+ if(!onDeviceTranslator)throw Error('端末内翻訳を準備できませんでした');
+ return onDeviceTranslator;
+}
+// Downloading the on-device model needs a user gesture, so start it on the click that opens a detail page.
+let translatorWarmTried=false;
+document.addEventListener('click',e=>{
+ if(translatorWarmTried||onDeviceTranslator||!('Translator' in self))return;
+ if(!e.target.closest('[data-detail-id],[data-airing-id],[data-related-id],.detail-trigger,[data-translate-synopsis]'))return;
+ translatorWarmTried=true;
+ onDeviceTranslatorPending=self.Translator.create({sourceLanguage:'en',targetLanguage:'ja'}).then(t=>onDeviceTranslator=t).catch(()=>null).finally(()=>onDeviceTranslatorPending=null);
+},true);
+function splitForTranslation(text,max=450){
+ const parts=[];let buf='';
+ for(const s of text.match(/[^.!?\n]+[.!?]*\n*|\n+/g)||[text]){
+  if(buf&&(buf+s).length>max){parts.push(buf);buf=''}
+  if(s.length>max){for(let i=0;i<s.length;i+=max)parts.push(s.slice(i,i+max))}else buf+=s;
+ }
+ if(buf)parts.push(buf);
+ return parts;
+}
+function decodeEntities(s){return new DOMParser().parseFromString(s,'text/html').documentElement.textContent||''}
+async function translateWebText(text){
+ const out=[];
+ for(const part of splitForTranslation(text.slice(0,4500))){
+  if(!part.trim()){out.push(part);continue}
+  const res=await fetch('https://api.mymemory.translated.net/get?'+new URLSearchParams({q:part.trim(),langpair:'en|ja'}));
+  if(!res.ok)throw Error('翻訳サービスに接続できませんでした');
+  const j=await res.json(),t=j?.responseData?.translatedText;
+  if(j?.responseStatus===429||/QUOTA|MYMEMORY WARNING/i.test(t||''))throw Error('翻訳サービスの1日の利用上限に達しました。時間をおいて再試行してください');
+  if(Number(j?.responseStatus)!==200||typeof t!=='string')throw Error('翻訳できませんでした');
+  out.push(decodeEntities(t)+(/\n+$/.exec(part)?.[0]||''));
+ }
+ return out.join('');
 }
 async function translateLocalSynopsis(id,token){
  const entry=detailCache.get(id);if(!entry?.full?.synopsis||likelyJapanese(entry.full.synopsis))return;
  const original=String(entry.full.synopsis),key=translationCacheKey(original),cached=jaTranslationCache[key];
- if(cached?.text){entry.localized={kind:'translated',text:cached.text};if(token===detailNonce)refreshDetailSynopsis(token);return}
+ if(cached?.text){entry.localized={kind:'translated',text:cached.text,via:cached.via||'local'};entry.translateError='';if(token===detailNonce)refreshDetailSynopsis(token);return}
  entry.translateBusy=true;entry.translateError='';if(token===detailNonce)refreshDetailSynopsis(token);
- try{const translator=await getOnDeviceTranslator();const translated=await translator.translate(original.slice(0,4500));
-  if(!translated||!likelyJapanese(translated))throw Error('日本語に翻訳できませんでした');
-  entry.localized={kind:'translated',text:translated};jaTranslationCache[key]={at:Date.now(),text:translated};smallCacheWrite(LOCAL_TRANSLATION_CACHE,jaTranslationCache,70);
- }catch(e){entry.translateError=e?.message||'端末内翻訳を使用できませんでした'}
+ try{
+  let text='',via='';
+  if('Translator' in self){
+   try{
+    const state=await self.Translator.availability({sourceLanguage:'en',targetLanguage:'ja'});
+    if(onDeviceTranslator||state==='available'){const t=await(await getOnDeviceTranslator()).translate(original.slice(0,4500));if(t&&likelyJapanese(t)){text=t;via='local'}}
+   }catch{/* fall through to the web translator */}
+  }
+  if(!text){const t=await translateWebText(original);if(!likelyJapanese(t))throw Error('日本語に翻訳できませんでした');text=t;via='web'}
+  entry.localized={kind:'translated',text,via};
+  jaTranslationCache[key]={at:Date.now(),text,via};smallCacheWrite(LOCAL_TRANSLATION_CACHE,jaTranslationCache,70);
+ }catch(e){entry.translateError=e?.message||'翻訳できませんでした'}
  finally{entry.translateBusy=false;if(token===detailNonce)refreshDetailSynopsis(token)}
 }
 async function localizeSynopsis(id,token){
  const entry=detailCache.get(id),full=entry?.full;if(!full||likelyJapanese(full.synopsis))return;
- const cacheKey=translationCacheKey(String(full.synopsis||''));
- if(full.synopsis&&jaTranslationCache[cacheKey]?.text){entry.localized={kind:'translated',text:jaTranslationCache[cacheKey].text};if(token===detailNonce)refreshDetailSynopsis(token);return}
+ const cached=jaTranslationCache[translationCacheKey(String(full.synopsis||''))];
+ if(full.synopsis&&cached?.text){entry.localized={kind:'translated',text:cached.text,via:cached.via||'local'};if(token===detailNonce)refreshDetailSynopsis(token);return}
  const jpTitle=wikiNameFrom(full,detailActiveItem);
  if(jpTitle){try{const w=await findJapaneseSummary(jpTitle);if(w){entry.localized={kind:'wiki',...w};if(token===detailNonce)refreshDetailSynopsis(token);return}}catch{/* unavailable Wikipedia should not block the title */}}
- if(!full.synopsis)return;
- if('Translator' in self){try{const state=await self.Translator.availability({sourceLanguage:'en',targetLanguage:'ja'});if(state==='available'){await translateLocalSynopsis(id,token);return}}catch{/* fall back to original */}}
- entry.offerTranslation='Translator' in self;if(token===detailNonce)refreshDetailSynopsis(token);
+ if(full.synopsis)await translateLocalSynopsis(id,token);
 }
 function refreshDetailSynopsis(token){
  if(token!==detailNonce||detailActiveTab!=='overview'||!detailActiveItem)return;
@@ -3038,11 +3076,11 @@ function detailSynopsis(d,entry){
   heading='日本語の作品概要';text=localized.text;
   note=`<p class="detail-source-note">出典：<a href="${safeText(safeLink(localized.url))}" target="_blank" rel="noopener noreferrer">日本語版Wikipedia「${safeText(localized.title)}」の執筆者</a>（<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.ja" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>）。冒頭部分の抜粋で、公式のあらすじとは異なります。</p>`;
  }else if(localized?.kind==='translated'){
-  text=localized.text;note='<p class="detail-source-note"><em>端末内で自動翻訳しました。</em> 翻訳には誤りが含まれる場合があります（原文：Tenrai API）。</p>';
+  text=localized.text;note=`<p class="detail-source-note"><em>${localized.via==='web'?'翻訳サービス（MyMemory）で自動翻訳しました。':'端末内で自動翻訳しました。'}</em> 翻訳には誤りが含まれる場合があります（原文：Tenrai API）。</p>`;
  }else if(!japaneseOriginal){
   note='<p class="detail-source-note">英語の原文（Tenrai API）。日本語の文章が見つかりませんでした。</p>';
   if(entry?.translateBusy)note+='<p class="detail-translation-pending">日本語への翻訳を準備しています…</p>';
-  else if(entry?.offerTranslation&&'Translator' in self)note+=`<button type="button" class="detail-translate-btn" data-translate-synopsis="true">${entry?.translateError?'翻訳を再試行':'無料で日本語に翻訳'} ${uiIcon('external')}</button>`;
+  else if(entry?.translateError)note+=`<button type="button" class="detail-translate-btn" data-translate-synopsis="true">${entry?.translateError?'翻訳を再試行':'無料で日本語に翻訳'} ${uiIcon('external')}</button>`;
   if(entry?.translateError)note+=`<p class="detail-source-note">翻訳できませんでした：${safeText(entry.translateError)}</p>`;
  }
  return detailHeading(heading,`<div class="detail-panel"><p class="detail-synopsis">${safeText(text)}</p>${note}</div>`);
