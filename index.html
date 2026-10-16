@@ -451,6 +451,11 @@ body.saved-mode:not(.view-detail):not(.view-ranking):not(.view-annual) .annual-e
 .airing-week-day.is-today h4{color:var(--accent)}
 .sidebar-bottom .auto-backup-btn{width:100%;margin-top:10px}
 .card-quick{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+.pattern-a-card.has-new{border-color:var(--accent-border);box-shadow:inset 3px 0 var(--accent)}
+.card-new-badge{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--gold);background:rgba(242,200,108,.12);color:var(--gold);font-size:var(--fs-xs);font-weight:var(--fw-bold);white-space:nowrap}
+.card-new-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.card-new-badge:hover{background:rgba(242,200,108,.2)}
+.airing-new{flex:0 0 auto;padding:2px 7px;border-radius:99px;background:rgba(242,200,108,.14);color:var(--gold);font-size:11px;font-weight:var(--fw-bold)}
 .card-quick:empty{display:none}
 .card-quick .next-watch-toggle{margin-top:0}
 .card-watch-btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:99px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-size:var(--fs-xs);font-weight:var(--fw-bold);text-decoration:none;white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
@@ -1730,9 +1735,10 @@ async function setWatchedProgressImpl(id,requested){const item=saved[id];
  const next=Number(requested);
  if(!Number.isSafeInteger(next)||next<0||next>9999){toast('話数は0〜9999の整数で入力してください。','error');return false}
  const before=watchedCount(item);if(before===next)return true;
- const oldUpdated=item.updatedAt;
- item.watchedEpisodes=next;item.updatedAt=new Date().toISOString();
- if(!await persist()){item.watchedEpisodes=before;item.updatedAt=oldUpdated;return false}
+ const oldUpdated=item.updatedAt,oldProgressAt=item.progressAt;
+ item.watchedEpisodes=next;item.updatedAt=new Date().toISOString();if(next>before)item.progressAt=item.updatedAt;
+ if(!await persist()){item.watchedEpisodes=before;item.updatedAt=oldUpdated;if(oldProgressAt)item.progressAt=oldProgressAt;else delete item.progressAt;return false}
+ if(next>before){clearNewBadge(id);renderAiringToday()}
 
  $$('[data-progress-for]').filter(el=>el.dataset.progressFor===id).forEach(el=>{
   const total=totalEpisodes(item,el.dataset.progressTotal?Number(el.dataset.progressTotal):null),usable=total!==null&&next<=total;
@@ -1815,7 +1821,7 @@ function rememberWatchLink(id,url,name){return queueRecordWrite(async()=>{
 })}
 function recordCard(a){const status=a.status,id=safeText(a.id),watch=['watching','paused'].includes(status),completed=status==='watched';
  const date=completed?`<button class="record-date pattern-a-date" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:'';
- return `<article class="anime-card record-card record-row pattern-a-card pattern-a-${safeText(status)}"><button class="record-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="record-main">${recordTitle(a)}${patternARecordMeta(a)}${date}<div class="card-quick">${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div></div><div class="pattern-a-watch-column">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','視聴を再開'):''}${completed?`<button type="button" class="pattern-a-date-watch" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:''}</div><div class="pattern-a-personal-column">${patternAReview(a)}${noteMarkup(a)}${a.updatedAt&&Number.isFinite(Date.parse(a.updatedAt))?`<span class="pattern-a-update">更新日：${safeText(new Date(a.updatedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}))}</span>`:''}</div></article>`;
+ return `<article class="anime-card record-card record-row pattern-a-card pattern-a-${safeText(status)}${hasNewRelease(a)?' has-new':''}"><button class="record-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="record-main">${recordTitle(a)}${patternARecordMeta(a)}${date}<div class="card-quick">${newBadgeMarkup(a)}${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div></div><div class="pattern-a-watch-column">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','視聴を再開'):''}${completed?`<button type="button" class="pattern-a-date-watch" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:''}</div><div class="pattern-a-personal-column">${patternAReview(a)}${noteMarkup(a)}${a.updatedAt&&Number.isFinite(Date.parse(a.updatedAt))?`<span class="pattern-a-update">更新日：${safeText(new Date(a.updatedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}))}</span>`:''}</div></article>`;
 }
 document.addEventListener('click',e=>{const panel=$('#filterDisclosure');if(panel.open&&!panel.contains(e.target))panel.open=false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#filterDisclosure').open){$('#filterDisclosure').open=false;$('#filterDisclosure summary').focus()}});
@@ -1918,13 +1924,34 @@ async function ensureBroadcastInfo(){
    }catch{broadcastFailed.add(next.id)}
    await new Promise(r=>setTimeout(r,450));
   }
- }finally{broadcastFetching=false;if(mode==='saved')renderAiringToday()}
+ }finally{broadcastFetching=false;if(mode==='saved'&&!document.activeElement?.matches('input,select,textarea'))render();else if(mode==='saved')renderAiringToday()}
 }
 function airingRow(a,b){
  const ep=watchedCount(a),total=totalEpisodes(a);
  const source=b.stream?(serviceName(a.watchService)&&a.watchService!=='other'?serviceName(a.watchService):a.watchLabel||'配信'):'TV';
- return `<li><button type="button" data-airing-id="${safeText(a.id)}"><span class="airing-time">${safeText(b.time||'--:--')}</span><span class="airing-source${b.stream?' is-stream':''}">${safeText(source)}</span><span class="airing-title">${safeText(a.title)}</span><span class="airing-progress">${ep?safeText(progressCountLabel(ep,total)):''}</span></button></li>`;
+ return `<li><button type="button" data-airing-id="${safeText(a.id)}"><span class="airing-time">${safeText(b.time||'--:--')}</span><span class="airing-source${b.stream?' is-stream':''}">${safeText(source)}</span><span class="airing-title">${safeText(a.title)}</span>${hasNewRelease(a)?'<span class="airing-new">未視聴</span>':''}<span class="airing-progress">${ep?safeText(progressCountLabel(ep,total)):''}</span></button></li>`;
 }
+function lastReleaseAt(a){
+ const s=airingSchedule(a);if(!s)return 0;
+ const day=BROADCAST_DAYS.indexOf(s.day),[h,m]=(s.time||'00:00').split(':').map(Number),off=9*3600e3;
+ const now=new Date(Date.now()+off),c=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),h,m));
+ c.setUTCDate(c.getUTCDate()-((now.getUTCDay()-day+7)%7));
+ if(c>now)c.setUTCDate(c.getUTCDate()-7);
+ return c.getTime()-off;
+}
+function hasNewRelease(a){
+ if(a?.status!=='watching')return false;
+ const total=totalEpisodes(a);if(total!==null&&watchedCount(a)>=total)return false;
+ const released=lastReleaseAt(a);if(!released)return false;
+ return (Date.parse(a.progressAt||a.updatedAt||'')||0)<released;
+}
+function newBadgeMarkup(a){return hasNewRelease(a)?`<button type="button" class="card-new-badge" data-seen-release="${safeText(a.id)}" title="押すと確認済みにします">新しい話が配信されました</button>`:''}
+function clearNewBadge(id){$$('[data-seen-release]').filter(b=>b.dataset.seenRelease===id).forEach(b=>{b.closest('.pattern-a-card')?.classList.remove('has-new');b.remove()})}
+function markReleaseSeen(id){return queueRecordWrite(async()=>{
+ const e=saved[id];if(!e)return false;const old=e.progressAt;e.progressAt=new Date().toISOString();
+ if(!await persist()){if(old)e.progressAt=old;else delete e.progressAt;return false}
+ clearNewBadge(id);renderAiringToday();toast('確認済みにしました');return true;
+})}
 function airingSchedule(a){
  if(BROADCAST_DAYS.includes(a.streamDay))return {day:a.streamDay,time:/^\d{2}:\d{2}$/.test(a.streamTime||'')?a.streamTime:null,stream:true};
  const b=readBroadcast(a.broadcast);return b?.airing&&b.day?{day:b.day,time:b.time,stream:false}:null;
@@ -2704,6 +2731,7 @@ $$('[data-view]').forEach(b=>b.addEventListener('click',()=>b.dataset.view==='sa
 $$('[data-status-filter]').forEach(b=>b.addEventListener('click',()=>showSaved(b.dataset.statusFilter)));
 $$('[data-stat-filter]').forEach(b=>b.addEventListener('click',()=>showSaved(b.dataset.statFilter)));
 $('#cards').addEventListener('click',e=>{
+ const seen=e.target.closest('[data-seen-release]');if(seen){markReleaseSeen(seen.dataset.seenRelease);return}
  const w=e.target.closest('[data-card-watch]');
  if(w){const id=w.dataset.cardWatch;if(saved[id]?.status!=='watching')setStatus(id,'watching');pendingWatch={id,at:Date.now()};return}
  if(e.target.closest('[data-open-watch]'))setTimeout(()=>$('#detailContent .watch-card')?.scrollIntoView({behavior:'smooth',block:'center'}),500);
@@ -2824,6 +2852,7 @@ function cleanImport(data){if(data?.app!=='ANI:LOG'||!Array.isArray(data.items))
   ...(a.status==='planned'&&typeof a.nextWatchPinnedAt==='string'&&Number.isFinite(Date.parse(a.nextWatchPinnedAt))?{nextWatchPinnedAt:a.nextWatchPinnedAt}:{}),
   ...(typeof a.nextWatchUpdatedAt==='string'&&Number.isFinite(Date.parse(a.nextWatchUpdatedAt))?{nextWatchUpdatedAt:a.nextWatchUpdatedAt}:{}),
   ...(WATCH_SERVICE_KEYS.has(a.watchService)?{watchService:a.watchService}:{}),
+  ...(typeof a.progressAt==='string'&&Number.isFinite(Date.parse(a.progressAt))?{progressAt:a.progressAt}:{}),
   ...(BROADCAST_DAYS.includes(a.streamDay)?{streamDay:a.streamDay,...(/^\d{2}:\d{2}$/.test(a.streamTime||'')?{streamTime:a.streamTime}:{})}:{}),
   ...(readWatchUrl(a.watchUrl)&&typeof a.watchLabel==='string'&&a.watchLabel.trim()?{watchUrl:readWatchUrl(a.watchUrl),watchLabel:a.watchLabel.trim().slice(0,40)}:{}),
   ...(readBroadcast(a.broadcast)?{broadcast:readBroadcast(a.broadcast)}:{})};
