@@ -455,6 +455,8 @@ body.saved-mode:not(.view-detail):not(.view-ranking):not(.view-annual) .annual-e
 .card-new-badge{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--gold);background:rgba(242,200,108,.12);color:var(--gold);font-size:var(--fs-xs);font-weight:var(--fw-bold);white-space:nowrap}
 .card-new-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold)}
 .card-new-badge:hover{background:rgba(242,200,108,.2)}
+.airing-ep{flex:0 0 auto;color:var(--muted);font-size:var(--fs-xs);font-weight:var(--fw-semi);font-variant-numeric:tabular-nums}
+.detail-stream-next{margin:6px 0 0;color:var(--accent);font-size:var(--fs-xs);font-weight:var(--fw-semi)}
 .airing-new{flex:0 0 auto;padding:2px 7px;border-radius:99px;background:rgba(242,200,108,.14);color:var(--gold);font-size:11px;font-weight:var(--fw-bold)}
 .card-quick:empty{display:none}
 .card-quick .next-watch-toggle{margin-top:0}
@@ -844,7 +846,7 @@ dialog menu button,.review-dialog-actions button{border-radius:var(--radius-sm);
         <div class="filter-tabs" id="filters"><button class="active" data-type="all">すべて</button><button data-type="TV">TV</button><button data-type="Movie">映画</button><button data-type="OVA">OVA</button><button data-type="ONA">Web配信</button><label class="search-sort hidden" id="searchSortWrap" for="searchSort"><span>並び替え</span><select id="searchSort" aria-label="検索結果の並び替え"><option value="new">新しい順</option><option value="relevance">関連度順</option><option value="old">古い順</option></select></label></div>
       </div>
 </div></details></div><div class="list-caption"><span class="result-info" id="resultInfo"></span><span id="listOrderHint">放送時期の新しい順</span><select id="savedOrder" class="saved-order-select hidden" aria-label="マイリストの年内の並び順"><option value="broadcast">放送時期が新しい順</option><option value="updated">更新が新しい順</option><option value="title">作品名順</option><option value="rating">評価が高い順</option></select></div>      <div id="offlineNotice" class="offline-note hidden" role="status"></div><div class="cards" id="cards" aria-live="polite"></div><div class="load-wrap"><button class="loadmore hidden" id="loadMore">もっと見る <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" focusable="false"><use href="#ui-down"/></svg></button></div>
-      <p class="disclaimer">作品情報提供：<a href="https://api.tenrai.org/documentation" target="_blank" rel="noopener noreferrer">Tenrai API</a>（非公式MyAnimeListデータ）。情報には欠落・誤表記が含まれる場合があります。作品検索で結果が少ない場合は、検索語を日本語Wikipediaへ送って別名を調べることがあります。英語のあらすじは、日本語にするため翻訳サービス（MyMemory）へ送ることがあります（どちらも視聴履歴は送信しません）。視聴履歴はこのブラウザに保存され、別端末には自動同期されません。<a href="https://tenrai.org/terms" target="_blank" rel="noopener noreferrer">データ提供元について</a></p>
+      <p class="disclaimer">作品情報提供：<a href="https://api.tenrai.org/documentation" target="_blank" rel="noopener noreferrer">Tenrai API</a>（非公式MyAnimeListデータ）。情報には欠落・誤表記が含まれる場合があります。作品検索で結果が少ない場合は、検索語を日本語Wikipediaへ送って別名を調べることがあります。英語のあらすじは、日本語にするため翻訳サービス（MyMemory）へ送ることがあります。「見てる」作品の放送日時は、作品ID（MyAnimeListの番号）を<a href="https://anilist.co/" target="_blank" rel="noopener noreferrer">AniList</a>へ送って取得します（評価・メモ・話数などの記録は送信しません）。視聴履歴はこのブラウザに保存され、別端末には自動同期されません。<a href="https://tenrai.org/terms" target="_blank" rel="noopener noreferrer">データ提供元について</a></p>
     </section>
     <section id="annualView" class="hidden" aria-label="年間アニメまとめ">
       <div class="annual-back-row"><button type="button" id="annualBack" class="detail-back"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><use href="#ui-back"/></svg> マイリストに戻る</button><span>YOUR ANIME YEAR</span></div>
@@ -1926,10 +1928,56 @@ async function ensureBroadcastInfo(){
   }
  }finally{broadcastFetching=false;if(mode==='saved'&&!document.activeElement?.matches('input,select,textarea'))render();else if(mode==='saved')renderAiringToday()}
 }
+const JST_OFFSET=9*3600e3;
+function jstParts(ms){const d=new Date(ms+JST_OFFSET);return {key:d.getUTCFullYear()*10000+(d.getUTCMonth()+1)*100+d.getUTCDate(),wd:d.getUTCDay(),time:String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')}}
+function readSchedule(x){
+ if(!x||typeof x!=='object'||!Array.isArray(x.eps)||!Number.isFinite(Date.parse(x.fetchedAt||'')))return null;
+ const eps=x.eps.filter(p=>Array.isArray(p)&&Number.isInteger(p[0])&&p[0]>0&&p[0]<10000&&Number.isFinite(p[1])).slice(0,80);
+ return {eps,fetchedAt:x.fetchedAt,status:typeof x.status==='string'?x.status.slice(0,20):''};
+}
+function streamDelayDays(a){const d=Number(a?.streamDelay);return Number.isInteger(d)&&d>=0&&d<=14?d:0}
+function episodeEvents(a){
+ if(BROADCAST_DAYS.includes(a.streamDay))return null;
+ const s=readSchedule(a.schedule);if(!s||!s.eps.length)return null;
+ const delay=streamDelayDays(a)*86400e3;return s.eps.map(([ep,at])=>({ep,at:at+delay}));
+}
+function latestReleasedEp(a){const ev=episodeEvents(a);if(!ev)return null;const now=Date.now();let max=0;for(const e of ev)if(e.at<=now&&e.ep>max)max=e.ep;return max}
+function nextReleaseEvent(a){const ev=episodeEvents(a);if(!ev)return null;const now=Date.now();return ev.filter(e=>e.at>now).sort((x,y)=>x.at-y.at)[0]||null}
+function sourceLabel(a,stream){if(!stream)return String(a.type||'').toUpperCase()==='ONA'?'配信':'TV';return serviceName(a.watchService)&&a.watchService!=='other'?serviceName(a.watchService):a.watchLabel||'配信'}
 function airingRow(a,b){
- const ep=watchedCount(a),total=totalEpisodes(a);
- const source=b.stream?(serviceName(a.watchService)&&a.watchService!=='other'?serviceName(a.watchService):a.watchLabel||'配信'):'TV';
- return `<li><button type="button" data-airing-id="${safeText(a.id)}"><span class="airing-time">${safeText(b.time||'--:--')}</span><span class="airing-source${b.stream?' is-stream':''}">${safeText(source)}</span><span class="airing-title">${safeText(a.title)}</span>${hasNewRelease(a)?'<span class="airing-new">未視聴</span>':''}<span class="airing-progress">${ep?safeText(progressCountLabel(ep,total)):''}</span></button></li>`;
+ const ep=watchedCount(a),total=totalEpisodes(a),stream=b.stream;
+ return `<li><button type="button" data-airing-id="${safeText(a.id)}"><span class="airing-time">${safeText(b.time||'--:--')}</span><span class="airing-source${stream?' is-stream':''}">${safeText(sourceLabel(a,stream))}</span><span class="airing-title">${safeText(a.title)}</span>${b.ep?`<span class="airing-ep">第${b.ep}話</span>`:''}${hasNewRelease(a)?'<span class="airing-new">未視聴</span>':''}<span class="airing-progress">${ep?safeText(progressCountLabel(ep,total)):''}</span></button></li>`;
+}
+let anilistFetching=false,anilistLastAttempt=0;
+function scheduleStale(a){const s=readSchedule(a.schedule);return !s||Date.now()-Date.parse(s.fetchedAt)>6*3600e3}
+async function ensureAnilistSchedules(){
+ if(anilistFetching||mode==='share'||Date.now()-anilistLastAttempt<60000)return;
+ const targets=Object.values(saved).filter(a=>a?.status==='watching'&&/^jikan:\d+$/.test(a.id)&&scheduleStale(a)).slice(0,50);
+ if(!targets.length)return;
+ anilistFetching=true;anilistLastAttempt=Date.now();
+ try{
+  const query='query($ids:[Int]){Page(perPage:50){media(idMal_in:$ids,type:ANIME){idMal status aired:airingSchedule(notYetAired:false,perPage:50){nodes{episode airingAt}} upcoming:airingSchedule(notYetAired:true,perPage:12){nodes{episode airingAt}}}}}';
+  const res=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,variables:{ids:targets.map(a=>Number(a.id.split(':')[1]))}})});
+  if(!res.ok)throw Error('AniList '+res.status);
+  const media=(await res.json())?.data?.Page?.media||[];
+  const nodesOf=m=>[...(m.aired?.nodes||[]),...(m.upcoming?.nodes||[])].filter(n=>Number.isInteger(n?.episode)&&Number.isFinite(n?.airingAt));
+  // One MAL id can map to several AniList entries (e.g. split cours); prefer the one still releasing.
+  const rank=m=>(m.status==='RELEASING'?1e13:0)+Math.max(0,...nodesOf(m).map(n=>n.airingAt));
+  const byMal=new Map();for(const m of media){const prev=byMal.get(m.idMal);if(!prev||rank(m)>rank(prev))byMal.set(m.idMal,m)}
+  const fetchedAt=new Date().toISOString();
+  await queueRecordWrite(async()=>{
+   const before=new Map();
+   for(const t of targets){
+    const e=saved[t.id];if(!e)continue;before.set(t.id,e.schedule);
+    const m=byMal.get(Number(t.id.split(':')[1])),seen=new Map();
+    for(const n of m?nodesOf(m):[])seen.set(n.episode,n.airingAt*1000);
+    e.schedule={eps:[...seen].sort((x,y)=>x[0]-y[0]).slice(-80),status:m?.status||'',fetchedAt};
+   }
+   if(!await persist()){for(const [id,s] of before){if(!saved[id])continue;if(s)saved[id].schedule=s;else delete saved[id].schedule}return false}
+   return true;
+  });
+ }catch{/* the weekly broadcast fallback still works */}
+ finally{anilistFetching=false;if(mode==='saved'&&!document.activeElement?.matches('input,select,textarea'))render()}
 }
 function lastReleaseAt(a){
  const s=airingSchedule(a);if(!s)return 0;
@@ -1939,17 +1987,26 @@ function lastReleaseAt(a){
  if(c>now)c.setUTCDate(c.getUTCDate()-7);
  return c.getTime()-off;
 }
+function seenEpisode(a){return Math.max(watchedCount(a),Number.isInteger(a?.seenEp)?a.seenEp:0)}
 function hasNewRelease(a){
  if(a?.status!=='watching')return false;
  const total=totalEpisodes(a);if(total!==null&&watchedCount(a)>=total)return false;
+ const latest=latestReleasedEp(a);
+ if(latest!==null)return latest>seenEpisode(a);
  const released=lastReleaseAt(a);if(!released)return false;
  return (Date.parse(a.progressAt||a.updatedAt||'')||0)<released;
 }
-function newBadgeMarkup(a){return hasNewRelease(a)?`<button type="button" class="card-new-badge" data-seen-release="${safeText(a.id)}" title="押すと確認済みにします">新しい話が配信されました</button>`:''}
+function newBadgeMarkup(a){
+ if(!hasNewRelease(a))return '';
+ const latest=latestReleasedEp(a),seen=seenEpisode(a);
+ const text=latest===null?'新しい話が配信されました':latest-seen===1?`第${latest}話が配信されました`:`第${seen+1}〜${latest}話が配信済み`;
+ return `<button type="button" class="card-new-badge" data-seen-release="${safeText(a.id)}" title="押すと確認済みにします">${text}</button>`;
+}
 function clearNewBadge(id){$$('[data-seen-release]').filter(b=>b.dataset.seenRelease===id).forEach(b=>{b.closest('.pattern-a-card')?.classList.remove('has-new');b.remove()})}
 function markReleaseSeen(id){return queueRecordWrite(async()=>{
- const e=saved[id];if(!e)return false;const old=e.progressAt;e.progressAt=new Date().toISOString();
- if(!await persist()){if(old)e.progressAt=old;else delete e.progressAt;return false}
+ const e=saved[id];if(!e)return false;const old=e.progressAt,oldSeen=e.seenEp,latest=latestReleasedEp(e);
+ e.progressAt=new Date().toISOString();if(latest)e.seenEp=latest;
+ if(!await persist()){if(old)e.progressAt=old;else delete e.progressAt;if(oldSeen!==undefined)e.seenEp=oldSeen;else delete e.seenEp;return false}
  clearNewBadge(id);renderAiringToday();toast('確認済みにしました');return true;
 })}
 function airingSchedule(a){
@@ -1961,14 +2018,25 @@ function renderAiringToday(){
  const watching=Object.values(saved).filter(a=>a?.status==='watching');
  const show=mode==='saved'&&(statusFilter==='all'||statusFilter==='watching')&&watching.length>0;
  box.hidden=!show;if(!show)return;
- const today=jstWeekdayIndex();
- const known=watching.map(a=>({a,b:airingSchedule(a)})).filter(x=>x.b);
- const byDay=BROADCAST_DAYS.map(d=>known.filter(x=>x.b.day===d).sort((x,y)=>String(x.b.time||'99').localeCompare(String(y.b.time||'99'))));
- const pending=watching.filter(a=>!a.streamDay&&/^jikan:\d+$/.test(a.id)&&!readBroadcast(a.broadcast)&&!broadcastFailed.has(a.id)).length;
- const todays=byDay[today]||[];
- const week=[0,1,2,3,4,5,6].map(k=>(today+k)%7).filter(i=>byDay[i].length).map(i=>`<div class="airing-week-day${i===today?' is-today':''}"><h4>${BROADCAST_DAY_JA[i]}曜日${i===today?'（今日）':''}</h4><ul class="airing-list">${byDay[i].map(x=>airingRow(x.a,x.b)).join('')}</ul></div>`).join('');
- box.innerHTML=`<div class="airing-today-head"><h3>今日の配信・放送（${BROADCAST_DAY_JA[today]}曜日）</h3><span>日本時間・「見てる」作品。配信日は作品詳細で設定できます</span></div>${todays.length?`<ul class="airing-list">${todays.map(x=>airingRow(x.a,x.b)).join('')}</ul>`:'<p class="airing-empty">今日放送予定の「見てる」作品はありません。</p>'}${week?`<details class="airing-week" id="airingWeek"${airingWeekOpen?' open':''}><summary>1週間のスケジュール</summary><div class="airing-week-grid">${week}</div></details>`:''}${pending?`<p class="airing-note">放送情報を取得中：${pending}作品</p>`:''}`;
- if(pending)ensureBroadcastInfo();
+ const days=[0,1,2,3,4,5,6].map(k=>jstParts(Date.now()+k*86400e3));
+ const byDay=days.map(()=>[]);
+ for(const a of watching){
+  const ev=episodeEvents(a);
+  if(ev){
+   for(const e of ev){const p=jstParts(e.at),i=days.findIndex(d=>d.key===p.key);if(i>=0)byDay[i].push({a,b:{time:p.time,ep:e.ep,stream:streamDelayDays(a)>0}})}
+   continue;
+  }
+  const s=airingSchedule(a);if(!s)continue;
+  const i=days.findIndex(d=>BROADCAST_DAYS[d.wd]===s.day);if(i>=0)byDay[i].push({a,b:{time:s.time,ep:null,stream:s.stream}});
+ }
+ byDay.forEach(list=>list.sort((x,y)=>String(x.b.time||'99').localeCompare(String(y.b.time||'99'))));
+ const pendingBroadcast=watching.filter(a=>!a.streamDay&&!readSchedule(a.schedule)?.eps.length&&/^jikan:\d+$/.test(a.id)&&!readBroadcast(a.broadcast)&&!broadcastFailed.has(a.id)).length;
+ const pending=watching.filter(a=>/^jikan:\d+$/.test(a.id)&&!readSchedule(a.schedule)).length;
+ const dayLabel=(d,i)=>`${Math.floor(d.key/100)%100}/${d.key%100}（${BROADCAST_DAY_JA[d.wd]}）${i===0?' 今日':''}`;
+ const week=days.map((d,i)=>byDay[i].length?`<div class="airing-week-day${i===0?' is-today':''}"><h4>${dayLabel(d,i)}</h4><ul class="airing-list">${byDay[i].map(x=>airingRow(x.a,x.b)).join('')}</ul></div>`:'').join('');
+ box.innerHTML=`<div class="airing-today-head"><h3>今日の配信・放送（${BROADCAST_DAY_JA[days[0].wd]}曜日）</h3><span>日本時間・「見てる」作品。放送日時はAniListから自動取得、配信の遅れは作品詳細で設定できます</span></div>${byDay[0].length?`<ul class="airing-list">${byDay[0].map(x=>airingRow(x.a,x.b)).join('')}</ul>`:'<p class="airing-empty">今日配信・放送予定の「見てる」作品はありません。</p>'}${week?`<details class="airing-week" id="airingWeek"${airingWeekOpen?' open':''}><summary>1週間のスケジュール</summary><div class="airing-week-grid">${week}</div></details>`:''}${pending?`<p class="airing-note">放送日時を取得中：${pending}作品</p>`:''}`;
+ ensureAnilistSchedules();
+ if(pendingBroadcast)ensureBroadcastInfo();
 }
 function render(){
  if(mode==='annual'){updateCounts();renderAnnual();return;}
@@ -2853,6 +2921,9 @@ function cleanImport(data){if(data?.app!=='ANI:LOG'||!Array.isArray(data.items))
   ...(typeof a.nextWatchUpdatedAt==='string'&&Number.isFinite(Date.parse(a.nextWatchUpdatedAt))?{nextWatchUpdatedAt:a.nextWatchUpdatedAt}:{}),
   ...(WATCH_SERVICE_KEYS.has(a.watchService)?{watchService:a.watchService}:{}),
   ...(typeof a.progressAt==='string'&&Number.isFinite(Date.parse(a.progressAt))?{progressAt:a.progressAt}:{}),
+  ...(Number.isInteger(a.streamDelay)&&a.streamDelay>0&&a.streamDelay<=14?{streamDelay:a.streamDelay}:{}),
+  ...(Number.isInteger(a.seenEp)&&a.seenEp>0&&a.seenEp<10000?{seenEp:a.seenEp}:{}),
+  ...(readSchedule(a.schedule)?{schedule:readSchedule(a.schedule)}:{}),
   ...(BROADCAST_DAYS.includes(a.streamDay)?{streamDay:a.streamDay,...(/^\d{2}:\d{2}$/.test(a.streamTime||'')?{streamTime:a.streamTime}:{})}:{}),
   ...(readWatchUrl(a.watchUrl)&&typeof a.watchLabel==='string'&&a.watchLabel.trim()?{watchUrl:readWatchUrl(a.watchUrl),watchLabel:a.watchLabel.trim().slice(0,40)}:{}),
   ...(readBroadcast(a.broadcast)?{broadcast:readBroadcast(a.broadcast)}:{})};
@@ -2997,7 +3068,7 @@ function detailHeader(a,full=null){
  const header=`<section class="detail-head detail-profile" aria-label="作品情報"><div class="detail-cover">${detailPoster(image)}</div>${detailActions(record)}<div class="detail-head-info"><div class="detail-eyebrow">作品情報</div><div class="detail-heading-badges">${badges.map((b,i)=>`<span class="detail-chip ${i===1?'accent':''}">${safeText(b)}</span>`).join('')}</div><h1>${safeText(title)}</h1>${alt?`<p class="detail-english">${safeText(alt)}</p>`:''}<div class="detail-facts">${facts.map(f=>`<span>${safeText(f)}</span>`).join('')}</div>${tags.length?`<div class="detail-tags">${tags.slice(0,12).map(t=>`<span>${safeText(t)}</span>`).join('')}</div>`:''}${studios.length?`<div class="detail-studio"><span>制作会社</span><strong>${safeText(studios.join(' / '))}</strong></div>`:''}${detailStreamingLinks(d,title,record)}</div></section>`;
 
  const datePanel=date?`<div class="detail-status-completion"><div class="detail-date-current"><span>${uiIcon('book')} 見終わった時期</span><strong>${safeText(savedDate)}</strong></div><details class="detail-date-disclosure"><summary>${uiIcon('edit')} ${record?.completedOn?'時期を編集する':'時期を記録する'} ${uiIcon('down')}</summary>${date}</details></div>`:'';
- const watchPanel=`<div class="detail-journal-cell detail-journal-watch"><div class="detail-journal-cell-heading">視聴状況</div><div class="detail-status-area">${mode==='share'?`<span class="detail-readonly">${safeText(statusLabels[a.status]||'閲覧専用')}</span>`:`<label class="sr-only" for="detailStatus">視聴状況</label><select id="detailStatus" aria-label="${safeText(title)}の視聴状況">${optionHtml}</select>`}</div>${record&&mode!=='share'?`<label class="detail-service-label" for="detailService">視聴サービス</label><div class="detail-status-area"><select id="detailService" aria-label="${safeText(title)}の視聴サービス"><option value="">未設定</option>${WATCH_SERVICES.map(s=>`<option value="${s.key}"${record.watchService===s.key?' selected':''}>${safeText(s.name)}</option>`).join('')}<option value="other"${record.watchService==='other'?' selected':''}>その他</option></select></div><label class="detail-service-label" for="detailStreamDay">配信日（毎週）</label><div class="detail-stream-schedule"><div class="detail-status-area"><select id="detailStreamDay" aria-label="${safeText(title)}の配信曜日"><option value="">TV放送日を使う</option>${[1,2,3,4,5,6,0].map(i=>`<option value="${BROADCAST_DAYS[i]}"${record.streamDay===BROADCAST_DAYS[i]?' selected':''}>${BROADCAST_DAY_JA[i]}曜日</option>`).join('')}</select></div><input type="time" id="detailStreamTime" aria-label="${safeText(title)}の配信時刻" value="${safeText(record.streamTime||'')}"${record.streamDay?'':' disabled'}></div>`:''}${progressMarkup(a,d.episodes||a.episodes,true)}${datePanel}${status==='planned'?nextWatchToggleMarkup(a):''}</div>`;
+ const watchPanel=`<div class="detail-journal-cell detail-journal-watch"><div class="detail-journal-cell-heading">視聴状況</div><div class="detail-status-area">${mode==='share'?`<span class="detail-readonly">${safeText(statusLabels[a.status]||'閲覧専用')}</span>`:`<label class="sr-only" for="detailStatus">視聴状況</label><select id="detailStatus" aria-label="${safeText(title)}の視聴状況">${optionHtml}</select>`}</div>${record&&mode!=='share'?`<label class="detail-service-label" for="detailService">視聴サービス</label><div class="detail-status-area"><select id="detailService" aria-label="${safeText(title)}の視聴サービス"><option value="">未設定</option>${WATCH_SERVICES.map(s=>`<option value="${s.key}"${record.watchService===s.key?' selected':''}>${safeText(s.name)}</option>`).join('')}<option value="other"${record.watchService==='other'?' selected':''}>その他</option></select></div>${streamScheduleMarkup(record,title)}`:''}${progressMarkup(a,d.episodes||a.episodes,true)}${datePanel}${status==='planned'?nextWatchToggleMarkup(a):''}</div>`;
  const reviewPanel=`<div class="detail-journal-cell detail-journal-review">${mode==='share'?(publicReviewMarkup(a)||'<div class="detail-journal-cell-heading">自分の評価</div><p class="detail-journal-empty">共有されている評価はありません</p>'):(reviewDetail(a)||'<div class="detail-journal-cell-heading">自分の評価</div><p class="detail-journal-empty">マイリストに登録すると★評価を記録できます</p>')}</div>`;
  const detailNote=saved[a.id]?readNote(saved[a.id]):null;
 
@@ -3179,16 +3250,25 @@ function setWatchService(id,key){return queueRecordWrite(async()=>{
  if(detailActiveItem?.id===id)renderDetailParts(detailNonce);
  toast(key?`視聴サービスを「${serviceName(key)}」に設定しました`:'視聴サービスの設定を外しました');return true;
 })}
-function setStreamSchedule(id,day,time){return queueRecordWrite(async()=>{
+function formatRelease(ms){const p=jstParts(ms);return `${Math.floor(p.key/100)%100}/${p.key%100}（${BROADCAST_DAY_JA[p.wd]}）${p.time}`}
+function streamScheduleMarkup(record,title){
+ const value=BROADCAST_DAYS.includes(record.streamDay)?'w:'+record.streamDay:'d'+streamDelayDays(record);
+ const opt=(v,label)=>`<option value="${v}"${v===value?' selected':''}>${label}</option>`;
+ const next=nextReleaseEvent(record),latest=latestReleasedEp(record);
+ const info=next?`次の配信：第${next.ep}話 ${formatRelease(next.at)}`:latest?`第${latest}話まで配信済み（次回の予定は未発表）`:'';
+ return `<label class="detail-service-label" for="detailStreamDay">配信日</label><div class="detail-stream-schedule"><div class="detail-status-area"><select id="detailStreamDay" aria-label="${safeText(title)}の配信日"><optgroup label="放送日時から自動で計算">${opt('d0','放送日どおり')}${[1,2,3,4,5,6,7].map(n=>opt('d'+n,`放送の${n}日後`)).join('')}</optgroup><optgroup label="曜日を固定（手動）">${[1,2,3,4,5,6,0].map(i=>opt('w:'+BROADCAST_DAYS[i],`毎週 ${BROADCAST_DAY_JA[i]}曜日`)).join('')}</optgroup></select></div><input type="time" id="detailStreamTime" aria-label="${safeText(title)}の配信時刻" value="${safeText(record.streamTime||'')}"${value.startsWith('w:')?'':' disabled'}></div>${info?`<p class="detail-stream-next">${safeText(info)}</p>`:''}`;
+}
+function setStreamSchedule(id,value,time){return queueRecordWrite(async()=>{
  const entry=saved[id];if(!entry)return false;
- const nextDay=BROADCAST_DAYS.includes(day)?day:'',nextTime=nextDay&&/^\d{2}:\d{2}$/.test(time||'')?time:'';
- if((entry.streamDay||'')===nextDay&&(entry.streamTime||'')===nextTime)return true;
- const oldDay=entry.streamDay,oldTime=entry.streamTime;
- if(nextDay)entry.streamDay=nextDay;else delete entry.streamDay;
- if(nextTime)entry.streamTime=nextTime;else delete entry.streamTime;
- if(!await persist()){if(oldDay)entry.streamDay=oldDay;else delete entry.streamDay;if(oldTime)entry.streamTime=oldTime;else delete entry.streamTime;return false}
+ const fixedDay=String(value||'').startsWith('w:')?value.slice(2):'',day=BROADCAST_DAYS.includes(fixedDay)?fixedDay:'';
+ const delay=day?0:Math.min(14,Math.max(0,parseInt(String(value).slice(1),10)||0));
+ const nextTime=day&&/^\d{2}:\d{2}$/.test(time||'')?time:'';
+ const before={streamDay:entry.streamDay,streamTime:entry.streamTime,streamDelay:entry.streamDelay};
+ if((entry.streamDay||'')===day&&(entry.streamTime||'')===nextTime&&streamDelayDays(entry)===delay)return true;
+ for(const [k,v] of [['streamDay',day],['streamTime',nextTime],['streamDelay',delay||'']]){if(v!=='')entry[k]=v;else delete entry[k]}
+ if(!await persist()){for(const [k,v] of Object.entries(before)){if(v!==undefined)entry[k]=v;else delete entry[k]}return false}
  if(detailActiveItem?.id===id)renderDetailParts(detailNonce);render();
- toast(nextDay?`配信日を毎週${BROADCAST_DAY_JA[BROADCAST_DAYS.indexOf(nextDay)]}曜日${nextTime?' '+nextTime:''}に設定しました`:'配信日の設定を外しました（TV放送日を使います）');return true;
+ toast(day?`配信日を毎週${BROADCAST_DAY_JA[BROADCAST_DAYS.indexOf(day)]}曜日${nextTime?' '+nextTime:''}に固定しました`:delay?`配信日を「放送の${delay}日後」にしました`:'配信日を「放送日どおり」にしました');return true;
 })}
 function offerEpisodeStep(id){
  const a=saved[id];if(!a||a.status!=='watching'||mode==='share')return;
