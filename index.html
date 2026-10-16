@@ -3314,6 +3314,7 @@ window.addEventListener('popstate',e=>{
 });
 if('scrollRestoration' in history)history.scrollRestoration='manual';
 aniHistoryReady=true;
+if(!location.hash.startsWith(SHARE_PREFIX)&&Object.values(saved).some(a=>a&&validStatuses.has(a.status)))mode='saved';
 // A direct shared URL is decoded asynchronously; showShared() will update the state.
 try{history.replaceState(aniHistorySnapshot(),'',location.href)}catch{}
 
@@ -3330,7 +3331,7 @@ async function restoreFromHash(){
   $('#importModeDialog').showModal();
  }catch{toast('復元リンクを読み込めませんでした。リンクが途中で切れていないか確認してください。','error')}
 }
-updateCounts();if(location.hash.startsWith(SHARE_PREFIX)){readShareFromHash()}else{render();fetchPage(true)}
+updateCounts();if(location.hash.startsWith(SHARE_PREFIX)){readShareFromHash()}else{render();if(mode==='season')fetchPage(true)}
 if(location.hash.startsWith('#restore='))restoreFromHash();
 initAutoBackup();
 setTimeout(remindBackup,2200);
