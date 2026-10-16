@@ -455,6 +455,12 @@ body.saved-mode:not(.view-detail):not(.view-ranking):not(.view-annual) .annual-e
 .card-new-badge{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:99px;border:1px solid var(--gold);background:rgba(242,200,108,.12);color:var(--gold);font-size:var(--fs-xs);font-weight:var(--fw-bold);white-space:nowrap}
 .card-new-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold)}
 .card-new-badge:hover{background:rgba(242,200,108,.2)}
+.airing-list button{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"time meta new" "title title progress";align-items:center;gap:6px 10px;padding:10px 12px}
+.airing-list .airing-time{grid-area:time;min-width:0}
+.airing-meta{grid-area:meta;display:flex;align-items:center;gap:8px;min-width:0}
+.airing-list .airing-new{grid-area:new;justify-self:end}
+.airing-list .airing-title{grid-area:title;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:var(--fs-sm);line-height:1.45}
+.airing-list .airing-progress{grid-area:progress;align-self:end;margin-left:0;white-space:nowrap}
 .airing-ep{flex:0 0 auto;color:var(--muted);font-size:var(--fs-xs);font-weight:var(--fw-semi);font-variant-numeric:tabular-nums}
 .detail-stream-next{margin:6px 0 0;color:var(--accent);font-size:var(--fs-xs);font-weight:var(--fw-semi)}
 .airing-new{flex:0 0 auto;padding:2px 7px;border-radius:99px;background:rgba(242,200,108,.14);color:var(--gold);font-size:11px;font-weight:var(--fw-bold)}
@@ -766,7 +772,10 @@ dialog menu button,.review-dialog-actions button{border-radius:var(--radius-sm);
   .annual-entry{display:none!important}
   .airing-today{padding:12px 14px;margin-bottom:16px}
   .airing-today-head{margin-bottom:8px}
-  .airing-list{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .airing-list{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
+  .airing-list>li{display:flex}
+  .airing-list>li>button{height:100%}
+  .airing-week-grid{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))!important}
   .airing-list button{padding:8px 10px}
   .airing-week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));column-gap:16px}
   .airing-week .airing-list{grid-template-columns:minmax(0,1fr)}
@@ -1946,7 +1955,7 @@ function nextReleaseEvent(a){const ev=episodeEvents(a);if(!ev)return null;const 
 function sourceLabel(a,stream){if(!stream)return String(a.type||'').toUpperCase()==='ONA'?'配信':'TV';return serviceName(a.watchService)&&a.watchService!=='other'?serviceName(a.watchService):a.watchLabel||'配信'}
 function airingRow(a,b){
  const ep=watchedCount(a),total=totalEpisodes(a),stream=b.stream;
- return `<li><button type="button" data-airing-id="${safeText(a.id)}"><span class="airing-time">${safeText(b.time||'--:--')}</span><span class="airing-source${stream?' is-stream':''}">${safeText(sourceLabel(a,stream))}</span><span class="airing-title">${safeText(a.title)}</span>${b.ep?`<span class="airing-ep">第${b.ep}話</span>`:''}${hasNewRelease(a)?'<span class="airing-new">未視聴</span>':''}<span class="airing-progress">${ep?safeText(progressCountLabel(ep,total)):''}</span></button></li>`;
+ return `<li><button type="button" data-airing-id="${safeText(a.id)}" title="${safeText(a.title)}"><span class="airing-time">${safeText(b.time||'時刻未定')}</span><span class="airing-meta"><span class="airing-source${stream?' is-stream':''}">${safeText(sourceLabel(a,stream))}</span>${b.ep?`<span class="airing-ep">第${b.ep}話</span>`:''}</span>${hasNewRelease(a)?'<span class="airing-new">未視聴</span>':''}<span class="airing-title">${safeText(a.title)}</span><span class="airing-progress">${ep?safeText(progressCountLabel(ep,total)):''}</span></button></li>`;
 }
 let anilistFetching=false,anilistLastAttempt=0;
 function scheduleStale(a){const s=readSchedule(a.schedule);return !s||Date.now()-Date.parse(s.fetchedAt)>6*3600e3}
