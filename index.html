@@ -814,6 +814,7 @@ dialog menu button,.review-dialog-actions button{border-radius:var(--radius-sm);
 .mini-quick{grid-area:quick;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}
 .mini-quick:empty{display:none}
 .mini-quick .card-watch-btn,.mini-quick .card-new-badge,.mini-quick .next-watch-toggle{height:28px;min-height:28px;margin:0;padding:0 11px}
+.card-release-chip{display:inline-flex;align-items:center;height:28px;padding:0 11px;border-radius:99px;border:1px solid var(--border-ctrl);color:var(--muted);font-size:var(--fs-xs);font-weight:var(--fw-semi);white-space:nowrap;font-variant-numeric:tabular-nums}
 .mini-controls{grid-area:controls;display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;min-width:0}
 .mini-spacer{flex:1 1 0;min-width:0}
 .mini-controls .pattern-a-status-menu{width:112px;max-width:112px}
@@ -1882,7 +1883,7 @@ function rememberWatchLink(id,url,name){return queueRecordWrite(async()=>{
 function recordCard(a){const status=a.status,id=safeText(a.id),watch=['watching','paused'].includes(status),completed=status==='watched';
  const date=completed?`<button type="button" class="mini-date" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:'';
  const start=status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','再開'):'';
- return `<article class="anime-card record-card mini-card mini-${safeText(status)}${hasNewRelease(a)?' has-new':''}"><button class="record-poster mini-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="mini-head">${recordTitle(a)}${patternARecordMeta(a)}</div><div class="mini-quick">${newBadgeMarkup(a)}${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div><div class="mini-controls">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${start}${date}<span class="mini-spacer"></span>${patternAReview(a)}${noteMarkup(a)}</div></article>`;
+ return `<article class="anime-card record-card mini-card mini-${safeText(status)}${hasNewRelease(a)?' has-new':''}"><button class="record-poster mini-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="mini-head">${recordTitle(a)}${patternARecordMeta(a)}</div><div class="mini-quick">${releaseStatusMarkup(a)}${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div><div class="mini-controls">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${start}${date}<span class="mini-spacer"></span>${patternAReview(a)}${noteMarkup(a)}</div></article>`;
 }
 document.addEventListener('click',e=>{const panel=$('#filterDisclosure');if(panel.open&&!panel.contains(e.target))panel.open=false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#filterDisclosure').open){$('#filterDisclosure').open=false;$('#filterDisclosure summary').focus()}});
@@ -2011,7 +2012,7 @@ let anilistFetching=false,anilistLastAttempt=0;
 function scheduleStale(a){const s=readSchedule(a.schedule);return !s||Date.now()-Date.parse(s.fetchedAt)>6*3600e3}
 async function ensureAnilistSchedules(){
  if(anilistFetching||mode==='share'||Date.now()-anilistLastAttempt<60000)return;
- const targets=Object.values(saved).filter(a=>a?.status==='watching'&&/^jikan:\d+$/.test(a.id)&&scheduleStale(a)).slice(0,50);
+ const targets=Object.values(saved).filter(a=>['watching','paused','planned'].includes(a?.status)&&/^jikan:\d+$/.test(a.id)&&scheduleStale(a)).slice(0,50);
  if(!targets.length)return;
  anilistFetching=true;anilistLastAttempt=Date.now();
  try{
@@ -2061,7 +2062,16 @@ function newBadgeMarkup(a){
  const text=latest===null?'新しい話が配信されました':latest-seen===1?`第${latest}話が配信されました`:`第${seen+1}〜${latest}話が配信済み`;
  return `<button type="button" class="card-new-badge" data-seen-release="${safeText(a.id)}" title="押すと確認済みにします">${text}</button>`;
 }
-function clearNewBadge(id){$$('[data-seen-release]').filter(b=>b.dataset.seenRelease===id).forEach(b=>{b.closest('.record-card')?.classList.remove('has-new');b.remove()})}
+function releaseStatusMarkup(a){
+ if(!['watching','paused','planned'].includes(a?.status))return '';
+ if(hasNewRelease(a))return newBadgeMarkup(a);
+ const latest=latestReleasedEp(a),next=nextReleaseEvent(a),sched=readSchedule(a.schedule);
+ const text=latest?`第${latest}話まで配信済み`:next?`第${next.ep}話 ${formatRelease(next.at)}配信予定`:sched?.status==='FINISHED'?'全話配信済み':'';
+ if(!text)return '';
+ const tip=latest&&next?`次回：第${next.ep}話 ${formatRelease(next.at)}`:'';
+ return `<span class="card-release-chip"${tip?` title="${safeText(tip)}"`:''}>${safeText(text)}</span>`;
+}
+function clearNewBadge(id){$$('[data-seen-release]').filter(b=>b.dataset.seenRelease===id).forEach(b=>{b.closest('.record-card')?.classList.remove('has-new');b.insertAdjacentHTML('afterend',saved[id]?releaseStatusMarkup(saved[id]):'');b.remove()})}
 function markReleaseSeen(id){return queueRecordWrite(async()=>{
  const e=saved[id];if(!e)return false;const old=e.progressAt,oldSeen=e.seenEp,latest=latestReleasedEp(e);
  e.progressAt=new Date().toISOString();if(latest)e.seenEp=latest;
