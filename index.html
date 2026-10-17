@@ -798,6 +798,55 @@ dialog menu button,.review-dialog-actions button{border-radius:var(--radius-sm);
   .quick-star .ui-icon{width:20px;height:20px}
   .pattern-a-update{display:none}
 }
+
+/* Compact my-list card: two rows (title + quick actions / one-line controls) */
+.mini-card{display:grid;grid-template-columns:58px minmax(0,1fr) auto;grid-template-areas:"poster head quick" "poster controls controls";column-gap:12px;row-gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);transition:background .15s,border-color .15s}
+.mini-card:hover{background:var(--surface2);border-color:var(--border-ctrl)}
+.mini-card.has-new{border-color:var(--accent-border);box-shadow:inset 3px 0 var(--accent)}
+.mini-poster{grid-area:poster;align-self:stretch;width:58px;min-height:82px;padding:0;border:0;border-radius:6px;background:var(--surface-input);overflow:hidden}
+.mini-poster img{width:100%;height:100%;object-fit:cover}
+.mini-poster .poster-fallback{font-size:var(--fs-xs)}
+.mini-poster .poster-fallback small{display:none}
+.mini-head{grid-area:head;min-width:0}
+.mini-head .card-title{margin:0;font-size:var(--fs-md);font-weight:var(--fw-bold);line-height:1.4}
+.mini-head .title-button{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-line-clamp:unset}
+.mini-head .pattern-a-meta{margin-top:2px;font-size:var(--fs-xs);gap:6px}
+.mini-quick{grid-area:quick;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+.mini-quick:empty{display:none}
+.mini-quick .card-watch-btn,.mini-quick .card-new-badge,.mini-quick .next-watch-toggle{height:28px;min-height:28px;margin:0;padding:0 11px}
+.mini-controls{grid-area:controls;display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;min-width:0}
+.mini-spacer{flex:1 1 0;min-width:0}
+.mini-controls .pattern-a-status-menu{width:112px;max-width:112px}
+.mini-controls .pattern-a-status-summary{height:30px;padding:0 9px;font-size:var(--fs-xs);gap:6px}
+.mini-controls .record-primary{width:auto;height:30px;min-height:30px;padding:0 12px;font-size:var(--fs-xs)}
+.mini-controls .watch-progress{display:flex;align-items:center;gap:8px;width:auto}
+.mini-controls .watch-progress-top{order:2;margin:0}
+.mini-controls .watch-progress-top>span,.mini-controls .watch-progress-entry>span,.mini-controls .watch-progress-hint{display:none!important}
+.mini-controls .watch-progress-top strong{font-size:var(--fs-xs);white-space:nowrap}
+.mini-controls .watch-progress-track{order:3;width:56px;height:4px;margin:0}
+.mini-controls .watch-progress-actions{order:1;gap:4px}
+.mini-controls .watch-progress-actions button{height:26px;width:26px}
+.mini-controls .watch-progress-actions button[data-progress-step="1"]{width:auto;padding:0 9px;white-space:nowrap}
+.mini-controls .watch-progress-entry input{width:36px;height:26px}
+.mini-controls .progress-completion-offer{order:4}
+.mini-date{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:0;color:var(--muted);font-size:var(--fs-xs);font-weight:var(--fw-semi)}
+.mini-date:hover{color:var(--accent)}
+.mini-controls .quick-rating{display:block}
+.mini-controls .quick-rating-label,.mini-controls .quick-rating-word{display:none}
+.mini-controls .quick-rating-row{gap:6px;flex-wrap:nowrap}
+.mini-controls .quick-star{padding:1px}
+.mini-controls .quick-star .ui-icon{width:18px;height:18px}
+.mini-controls .note-preview:not(.has-note){width:30px;max-width:30px;height:30px;min-height:30px;padding:0;justify-content:center}
+.mini-controls .note-preview:not(.has-note) .note-preview-label{display:none}
+.mini-controls .note-preview.has-note{width:auto;max-width:200px;height:30px}
+.mini-controls .note-preview.has-note .note-preview-quote{-webkit-line-clamp:1;font-size:var(--fs-xs)}
+@media(min-width:741px){.pattern-a-list{grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:10px}}
+@media(max-width:740px){
+  .mini-card{grid-template-columns:52px minmax(0,1fr);grid-template-areas:"poster head" "poster quick" "controls controls";padding:10px}
+  .mini-poster{width:52px;min-height:74px}
+  .mini-quick{justify-content:flex-start}
+  .mini-spacer{display:none}
+}
 </style>
 </head>
 <body>
@@ -1831,8 +1880,9 @@ function rememberWatchLink(id,url,name){return queueRecordWrite(async()=>{
  render();return true;
 })}
 function recordCard(a){const status=a.status,id=safeText(a.id),watch=['watching','paused'].includes(status),completed=status==='watched';
- const date=completed?`<button class="record-date pattern-a-date" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:'';
- return `<article class="anime-card record-card record-row pattern-a-card pattern-a-${safeText(status)}${hasNewRelease(a)?' has-new':''}"><button class="record-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="record-main">${recordTitle(a)}${patternARecordMeta(a)}${date}<div class="card-quick">${newBadgeMarkup(a)}${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div></div><div class="pattern-a-watch-column">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','視聴を再開'):''}${completed?`<button type="button" class="pattern-a-date-watch" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?'見終えた時期：'+safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:''}</div><div class="pattern-a-personal-column">${patternAReview(a)}${noteMarkup(a)}${a.updatedAt&&Number.isFinite(Date.parse(a.updatedAt))?`<span class="pattern-a-update">更新日：${safeText(new Date(a.updatedAt).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}))}</span>`:''}</div></article>`;
+ const date=completed?`<button type="button" class="mini-date" data-detail-id="${id}">${uiIcon('book')}${a.completedOn?safeText(formatCompletedOn(a.completedOn)):'見終えた時期を記録'}</button>`:'';
+ const start=status==='planned'?quickStatus(a,'watching','見始める'):status==='paused'?quickStatus(a,'watching','再開'):'';
+ return `<article class="anime-card record-card mini-card mini-${safeText(status)}${hasNewRelease(a)?' has-new':''}"><button class="record-poster mini-poster" data-detail-id="${id}" aria-label="${safeText(a.title)}の作品詳細を開く">${posterMarkup(a)}</button><div class="mini-head">${recordTitle(a)}${patternARecordMeta(a)}</div><div class="mini-quick">${newBadgeMarkup(a)}${watchButtonMarkup(a)}${status==='planned'?nextWatchToggleMarkup(a):''}</div><div class="mini-controls">${patternAStatusMenu(a)}${watch?progressMarkup(a):''}${start}${date}<span class="mini-spacer"></span>${patternAReview(a)}${noteMarkup(a)}</div></article>`;
 }
 document.addEventListener('click',e=>{const panel=$('#filterDisclosure');if(panel.open&&!panel.contains(e.target))panel.open=false});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#filterDisclosure').open){$('#filterDisclosure').open=false;$('#filterDisclosure summary').focus()}});
@@ -2011,7 +2061,7 @@ function newBadgeMarkup(a){
  const text=latest===null?'新しい話が配信されました':latest-seen===1?`第${latest}話が配信されました`:`第${seen+1}〜${latest}話が配信済み`;
  return `<button type="button" class="card-new-badge" data-seen-release="${safeText(a.id)}" title="押すと確認済みにします">${text}</button>`;
 }
-function clearNewBadge(id){$$('[data-seen-release]').filter(b=>b.dataset.seenRelease===id).forEach(b=>{b.closest('.pattern-a-card')?.classList.remove('has-new');b.remove()})}
+function clearNewBadge(id){$$('[data-seen-release]').filter(b=>b.dataset.seenRelease===id).forEach(b=>{b.closest('.record-card')?.classList.remove('has-new');b.remove()})}
 function markReleaseSeen(id){return queueRecordWrite(async()=>{
  const e=saved[id];if(!e)return false;const old=e.progressAt,oldSeen=e.seenEp,latest=latestReleasedEp(e);
  e.progressAt=new Date().toISOString();if(latest)e.seenEp=latest;
